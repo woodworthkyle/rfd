@@ -9,7 +9,7 @@ use super::{
     AsModal,
 };
 
-use super::utils::{INSWindow, NSWindow};
+use super::utils::{IUIWindow, UIWindow};
 use objc::runtime::Object;
 use objc::{class, msg_send, sel, sel_impl};
 use objc_foundation::{INSString, NSString};
