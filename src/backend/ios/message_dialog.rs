@@ -108,7 +108,7 @@ use crate::backend::AsyncMessageDialogImpl;
 
 impl AsyncMessageDialogImpl for MessageDialog {
     fn show_async(self) -> DialogFutureType<bool> {
-        let win = self.parent.as_ref().map(NSWindow::from_raw_window_handle);
+        let win = self.parent.as_ref().map(UIWindow::from_raw_window_handle);
 
         let future = ModalFuture::new(
             win,
