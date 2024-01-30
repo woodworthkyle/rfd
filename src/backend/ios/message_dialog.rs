@@ -1,7 +1,7 @@
 use std::ops::DerefMut;
 
 use crate::backend::DialogFutureType;
-use crate::message_dialog::{MessageButtons, MessageDialog, /*MessageDialogResult,*/ MessageLevel};
+use crate::message_dialog::{MessageButtons, MessageDialog, MessageLevel};
 
 use super::{
     modal_future::ModalFuture,
@@ -9,7 +9,7 @@ use super::{
     AsModal,
 };
 
-use super::utils::{IUIWindow, UIWindow};
+use super::utils::{INSWindow, NSWindow};
 use objc::runtime::Object;
 use objc::{class, msg_send, sel, sel_impl};
 use objc_foundation::{INSString, NSString};
@@ -28,12 +28,11 @@ enum NSAlertStyle {
 #[derive(Debug, PartialEq)]
 enum NSAlertReturn {
     FirstButton = 1000,
-    SecondButton = 1001,
-    ThirdButton = 1002,
+    // SecondButton = 1001,
+    // ThirdButton = 1002,
 }
 
 pub struct NSAlert {
-    buttons: MessageButtons,
     alert: Id<Object>,
     _focus_manager: FocusManager,
     _policy_manager: PolicyManager,
@@ -55,24 +54,12 @@ impl NSAlert {
             let _: () = msg_send![alert, setAlertStyle: level as i64];
         }
 
-        let buttons = match &opt.buttons {
+        let buttons = match opt.buttons {
             MessageButtons::Ok => vec!["OK".to_owned()],
             MessageButtons::OkCancel => vec!["OK".to_owned(), "Cancel".to_owned()],
             MessageButtons::YesNo => vec!["Yes".to_owned(), "No".to_owned()],
-            /*MessageButtons::YesNoCancel => {
-               vec!["Yes".to_owned(), "No".to_owned(), "Cancel".to_owned()]
-            }*/
-            MessageButtons::OkCustom(ok_text) => vec![ok_text.to_owned()],
-            MessageButtons::OkCancelCustom(ok_text, cancel_text) => {
-                vec![ok_text.to_owned(), cancel_text.to_owned()]
-            }
-            /*MessageButtons::YesNoCancelCustom(yes_text, no_text, cancel_text) => {
-                vec![
-                    yes_text.to_owned(),
-                    no_text.to_owned(),
-                    cancel_text.to_owned(),
-                ]
-            }*/
+            MessageButtons::OkCustom(ok_text) => vec![ok_text],
+            MessageButtons::OkCancelCustom(ok_text, cancel_text) => vec![ok_text, cancel_text],
         };
 
         for button in buttons {
@@ -93,67 +80,14 @@ impl NSAlert {
 
         Self {
             alert: unsafe { Id::from_retained_ptr(alert) },
-            buttons: opt.buttons,
             _focus_manager,
             _policy_manager,
         }
     }
 
-    pub fn run(self) -> MessageDialogResult {
+    pub fn run(self) -> bool {
         let ret: i64 = unsafe { msg_send![self.alert, runModal] };
-        dialog_result(&self.buttons, ret)
-    }
-}
-
-fn dialog_result(buttons: &MessageButtons, ret: i64) -> MessageDialogResult {
-    match buttons {
-        MessageButtons::Ok if ret == NSAlertReturn::FirstButton as i64 => MessageDialogResult::Ok,
-        MessageButtons::OkCancel if ret == NSAlertReturn::FirstButton as i64 => {
-            MessageDialogResult::Ok
-        }
-        MessageButtons::OkCancel if ret == NSAlertReturn::SecondButton as i64 => {
-            MessageDialogResult::Cancel
-        }
-        MessageButtons::YesNo if ret == NSAlertReturn::FirstButton as i64 => {
-            MessageDialogResult::Yes
-        }
-        MessageButtons::YesNo if ret == NSAlertReturn::SecondButton as i64 => {
-            MessageDialogResult::No
-        }
-        /*MessageButtons::YesNoCancel if ret == NSAlertReturn::FirstButton as i64 => {
-            MessageDialogResult::Yes
-        }
-        MessageButtons::YesNoCancel if ret == NSAlertReturn::SecondButton as i64 => {
-            MessageDialogResult::No
-        }
-        MessageButtons::YesNoCancel if ret == NSAlertReturn::ThirdButton as i64 => {
-            MessageDialogResult::Cancel
-        }*/
-        MessageButtons::OkCustom(custom) if ret == NSAlertReturn::FirstButton as i64 => {
-            MessageDialogResult::Custom(custom.to_owned())
-        }
-        MessageButtons::OkCancelCustom(custom, _) if ret == NSAlertReturn::FirstButton as i64 => {
-            MessageDialogResult::Custom(custom.to_owned())
-        }
-        MessageButtons::OkCancelCustom(_, custom) if ret == NSAlertReturn::SecondButton as i64 => {
-            MessageDialogResult::Custom(custom.to_owned())
-        }
-        /*MessageButtons::YesNoCancelCustom(custom, _, _)
-            if ret == NSAlertReturn::FirstButton as i64 =>
-        {
-            MessageDialogResult::Custom(custom.to_owned())
-        }
-        MessageButtons::YesNoCancelCustom(_, custom, _)
-            if ret == NSAlertReturn::SecondButton as i64 =>
-        {
-            MessageDialogResult::Custom(custom.to_owned())
-        }
-        MessageButtons::YesNoCancelCustom(_, _, custom)
-            if ret == NSAlertReturn::ThirdButton as i64 =>
-        {
-            MessageDialogResult::Custom(custom.to_owned())
-        }*/
-        _ => MessageDialogResult::Cancel,
+        ret == NSAlertReturn::FirstButton as i64
     }
 }
 
@@ -165,7 +99,7 @@ impl AsModal for NSAlert {
 
 use crate::backend::MessageDialogImpl;
 impl MessageDialogImpl for MessageDialog {
-    fn show(self) -> MessageDialogResult {
+    fn show(self) -> bool {
         objc::rc::autoreleasepool(move || run_on_main(move || NSAlert::new(self).run()))
     }
 }
@@ -173,13 +107,13 @@ impl MessageDialogImpl for MessageDialog {
 use crate::backend::AsyncMessageDialogImpl;
 
 impl AsyncMessageDialogImpl for MessageDialog {
-    fn show_async(self) -> DialogFutureType<MessageDialogResult> {
-        let win = self.parent.as_ref().map(UIWindow::from_raw_window_handle);
+    fn show_async(self) -> DialogFutureType<bool> {
+        let win = self.parent.as_ref().map(NSWindow::from_raw_window_handle);
 
         let future = ModalFuture::new(
             win,
             move || NSAlert::new(self),
-            |dialog, ret| dialog_result(&dialog.buttons, ret),
+            |_, res_id| res_id == NSAlertReturn::FirstButton as i64,
         );
         Box::pin(future)
     }
