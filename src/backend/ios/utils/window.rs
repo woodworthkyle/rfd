@@ -9,11 +9,11 @@ use raw_window_handle::RawWindowHandle;
 pub trait IUIWindow: INSObject {
     fn from_raw_window_handle(h: &RawWindowHandle) -> Id<Self> {
         match h {
-            RawWindowHandle::AppKit(h) => {
-                let id = h.ns_window as *mut Self;
+            RawWindowHandle::UiKit(h) => {
+                let id = h.ui_view as *mut Self;
                 unsafe { Id::from_ptr(id) }
             }
-            _ => unreachable!("unsupported window handle, expected: MacOS"),
+            _ => unreachable!("unsupported window handle, expected: iOS"),
         }
     }
 
